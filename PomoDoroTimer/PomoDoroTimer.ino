@@ -1,3 +1,6 @@
+#include <LiquidCrystal.h>
+//init LCD
+LiquidCrystal lcd(9, 8, 7, 6, 5, 4);
 //define potentiometers for setting, define timings for mapping,
 //unsigned longs for timing (I hate millis)
 int PotentPin1 = A5;
@@ -16,23 +19,26 @@ unsigned long workMillis = 0;
 unsigned long shortBreakMillis = 0;
 unsigned long longBreakMillis = 0;
 //define bools and pins for start switch
-int startPin = 2;
+int startPin = 3;
 bool timerActive = 0;
 //values for timing
 unsigned long startTime = 0;
 unsigned long displayTime = 0;
+int elapsedMinutes = 0;
+int elapsedSeconds = 0;
 int timerStep = 0;
 //Define Pizo-pin, switch & buzz duration
-int buzzPin = 7;
+int buzzPin = 11;
 int buzzDur = 400;
-int buzzActive = 1;
-int buzzSwitch = 0;
+int buzzActive = 0;
+int buzzSwitch = 2;
+int buzzLED = A2;
 int buzzFreq = 2500;
 //define LED pins
 int offLED = 13;
-int workLED = 5;
-int breakLED1 = 4;
-int breakLED2 = 6;
+int workLED = A0;
+int breakLED1 = A1;
+int breakLED2 = 12;
 void setup() {
   //initiate serial connection for debugging
 Serial.begin(9600);
@@ -42,11 +48,16 @@ pinMode(offLED, OUTPUT);
 pinMode(workLED, OUTPUT);
 pinMode(breakLED1, OUTPUT);
 pinMode(breakLED2, OUTPUT);
+pinMode(buzzSwitch, INPUT);
+pinMode(buzzLED, OUTPUT);
+//initialise screen
+lcd.begin(16,2);
+lcd.print("Screen ready!");
 }
 
 //Buzzer functions
 void longBuzz (){
-  tone(buzzPin, buzzFreq, buzzDur);
+  tone(buzzPin, buzzFreq/2, buzzDur);
 }
 
 void shortBuzz (){
@@ -56,7 +67,15 @@ void shortBuzz (){
 void doubleBuzz (){
   tone(buzzPin, buzzFreq, (buzzDur/4));
   delay(buzzDur/2);
-  tone(buzzPin, buzzFreq, (buzzDur/4));
+  tone(buzzPin, buzzFreq*1.3, (buzzDur/4));
+}
+
+void tripleBuzz(){
+  tone(buzzPin, buzzFreq, (buzzDur/8));
+  delay(buzzDur/4);
+  tone(buzzPin, buzzFreq*1.3, (buzzDur/8));
+  delay(buzzDur/4);
+  tone(buzzPin, buzzFreq*1.5, (buzzDur/8));
 }
 //LED functions
 void stbyLED(){
@@ -83,6 +102,21 @@ void longBreakLED(){
   digitalWrite(breakLED1, HIGH);
   digitalWrite(breakLED2, HIGH);
 }
+//Screen functions
+void displayRuntime(int m, int s){
+      lcd.setCursor(0, 1);
+    lcd.print(m);
+    if(m < 10){
+      lcd.setCursor(1,1);
+      lcd.print(":");
+      lcd.print(s);
+    }
+    if(m >= 10){
+     lcd.setCursor(2,1);
+     lcd.print(":");
+     lcd.print(s); 
+    }
+}
 
 void loop() {
   //read & map potentiometers to get timings
@@ -90,15 +124,21 @@ void loop() {
   //something will break spectacularly
   if(timerActive == 0){
 potentOutput1 = analogRead(PotentPin1);
-workTime = map(potentOutput1, 0, 1023, 3, 30);
+workTime = map(potentOutput1, 0, 1023, 15, 35);
 potentOutput2 = analogRead(PotentPin2);
 shortBreakTime = map(potentOutput2, 0, 1023, 1, 10);
 potentOutput3 = analogRead(PotentPin3);
-longBreakTime = map(potentOutput3, 0, 1023, 2, 30);
+longBreakTime = map(potentOutput3, 0, 1023, 10, 30);
   }
   //convert values to timing longs if there is a change
   //and print them in serial for debugging
 if (workTime != workTimeOld){
+  lcd.clear();
+  lcd.print("Work time:");
+  lcd.setCursor(0, 1);
+  lcd.print(workTime);
+  lcd.setCursor(3, 1);
+  lcd.print("Min");
   Serial.println(" Work Time: ");
   Serial.println(workTime);
   workMillis = workTime*60000;
@@ -107,6 +147,12 @@ if (workTime != workTimeOld){
   workTimeOld = workTime;
 }
 if (shortBreakTime != shortBreakTimeOld){
+  lcd.clear();
+  lcd.print("S. break time:");
+  lcd.setCursor(0, 1);
+  lcd.print(shortBreakTime);
+  lcd.setCursor(3, 1);
+  lcd.print("Min");
   Serial.println(" Short Break: ");
   Serial.println(shortBreakTime);
   shortBreakMillis = shortBreakTime*60000;
@@ -115,12 +161,44 @@ if (shortBreakTime != shortBreakTimeOld){
   shortBreakTimeOld = shortBreakTime;
 }
 if (longBreakTime != longBreakTimeOld){
+    lcd.clear();
+  lcd.print("L. break time:");
+  lcd.setCursor(0, 1);
+  lcd.print(longBreakTime);
+  lcd.setCursor(3, 1);
+  lcd.print("Min");
   Serial.println(" Long Break ");
   Serial.println(longBreakTime);
   longBreakMillis = longBreakTime*60000;
   Serial.println(" Or in ms: ");
   Serial.println(longBreakMillis);
   longBreakTimeOld = longBreakTime;
+}
+//Define buzzer switch & LED functions
+if(buzzActive == 1 && digitalRead(buzzSwitch) == HIGH){
+  Serial.println("Buzzer Off!");
+  lcd.clear();
+  lcd.print("Sound off!");
+  buzzActive = 0;
+  delay(300);
+}
+if(buzzActive == 0 && digitalRead(buzzSwitch) == HIGH){
+  buzzActive = 1;
+  Serial.println("Buzzer On!");
+  lcd.clear();
+  lcd.print("Sound on!");
+  tripleBuzz();
+  delay(300);
+}
+switch(buzzActive){
+  case 0:
+  digitalWrite(buzzLED, LOW);
+  break;
+  case 1:
+  digitalWrite(buzzLED, HIGH);
+  break;
+  default:
+  break;
 }
 //start timer if button is pressed & timer is off
 if (digitalRead(startPin) == HIGH && timerActive == 0){
@@ -146,6 +224,8 @@ if (digitalRead(startPin) == HIGH && timerActive == 1){
     longBuzz();
   }
   Serial.println("Timer stopped & reset! ");
+  lcd.clear();
+  lcd.print("Timer stopped!");
   delay(300);
 }
 //LED control code
@@ -193,18 +273,25 @@ else{
 //you want to fuck around with piezo.
 
 if (timerActive == 1 && millis() < (startTime+workMillis) && timerStep == 0){
-  //start by limiting feedback to once every 30 seconds
-  if(millis() >= (displayTime+30000)) {
+  //start by limiting feedback to once every second
+  if(millis() >= (displayTime+1000)) {
     Serial.println("Work time! ");
     Serial.println("Time Elapsed: ");
     Serial.print((millis()-startTime)/60000);
     Serial.print(" minutes");
+    //Screen code
+    elapsedMinutes = ((millis()-startTime)/60000);
+    elapsedSeconds = (((millis()-startTime)/1000)-(elapsedMinutes*60));
+    lcd.clear();
+    lcd.print("Work Time:");
+    displayRuntime(elapsedMinutes, elapsedSeconds);
     displayTime = millis();
   }
 }
   //iterate timerStep when time elapses
   if(millis() >= (startTime+workMillis) && timerStep == 0 && timerActive == 1){
     timerStep++;
+    startTime = startTime+workMillis;
     if(buzzActive == 1){
       shortBuzz();
     }
@@ -212,97 +299,148 @@ if (timerActive == 1 && millis() < (startTime+workMillis) && timerStep == 0){
   }
 if (timerActive == 1 && millis() < (startTime+workMillis+shortBreakMillis) && timerStep == 1){
   //start by limiting feedback to once every 30 seconds
-  if(millis() >= (displayTime+30000)) {
+  if(millis() >= (displayTime+1000)) {
     Serial.println("Break time! ");
     Serial.println("Time Elapsed: ");
-    Serial.print((millis()-(startTime+workMillis))/60000);
+    Serial.print((millis()-startTime)/60000);
     Serial.print(" minutes");
+    lcd.clear();
+    lcd.print("Break Time:");
+    lcd.setCursor(0, 1);
+    elapsedMinutes = ((millis()-startTime)/60000);
+    elapsedSeconds = (((millis()-startTime)/1000)-(elapsedMinutes*60));
+    displayRuntime(elapsedMinutes, elapsedSeconds);
     displayTime = millis();
 }
 }
-if(millis() >= startTime+workMillis+shortBreakMillis && timerStep == 1 && timerActive == 1){
+if(millis() >= startTime+shortBreakMillis && timerStep == 1 && timerActive == 1){
   Serial.println("Back to work! ");
   if(buzzActive == 1){
     doubleBuzz();
   }
   timerStep++;
+  startTime = startTime+shortBreakMillis;
 }
-if(millis() >= startTime+workMillis+shortBreakMillis && timerStep == 2 && timerActive == 1){
-    if(millis() >= (displayTime+30000)) {
-    Serial.println("Work time! ");
-    Serial.println("Time Elapsed: ");
-    Serial.print((millis()-(startTime+workMillis+shortBreakMillis))/60000);
-    Serial.print(" minutes");
+if(millis() >= startTime && timerStep == 2 && timerActive == 1){
+    if(millis() >= (displayTime+1000)) {
+    elapsedMinutes = ((millis()-startTime)/60000);
+    elapsedSeconds = (((millis()-startTime)/1000)-(elapsedMinutes*60));
+    lcd.clear();
+    lcd.print("Back to work!");
+    displayRuntime(elapsedMinutes, elapsedSeconds);
     displayTime = millis();
   }
 }
-if(millis() >= startTime+(2*workMillis)+shortBreakMillis && timerStep == 2 && timerActive == 1){
+if(millis() >= startTime+workMillis && timerStep == 2 && timerActive == 1){
   Serial.println("Second break time! ");
+  if(buzzActive == 1){
+    shortBuzz();
+  }
   timerStep++;
+  startTime = startTime+workMillis;
 }
-if(millis() >= startTime+(2*workMillis)+shortBreakMillis && timerStep == 3 && timerActive == 1){
-  if(millis() >= (displayTime+30000)) {
-    Serial.println("Break time! ");
-    Serial.println("Time Elapsed: ");
-    Serial.print((millis()-(startTime+(2*workMillis)+shortBreakMillis))/60000);
-    Serial.print(" minutes");
+if(millis() >= startTime && timerStep == 3 && timerActive == 1){
+  if(millis() >= (displayTime+1000)) {
+    elapsedMinutes = ((millis()-startTime)/60000);
+    elapsedSeconds = (((millis()-startTime)/1000)-(elapsedMinutes*60));
+    lcd.clear();
+    lcd.print("Second break!");
+    displayRuntime(elapsedMinutes, elapsedSeconds);
     displayTime = millis();
   }
 }
-if(millis() >= startTime+(2*workMillis)+(2*shortBreakMillis) && timerStep == 3 && timerActive == 1){
+if(millis() >= startTime+shortBreakMillis && timerStep == 3 && timerActive == 1){
    Serial.println("Back to work! ");
+   if(buzzActive == 1){
+    doubleBuzz();
+   }
    timerStep++;
+   startTime = startTime+shortBreakMillis;
+   
 }
-if(millis() >= startTime+(2*workMillis)+(2*shortBreakMillis) && timerStep == 4 && timerActive == 1){
-  if(millis() >= (displayTime+30000)) {
+if(millis() >= startTime && timerStep == 4 && timerActive == 1){
+  if(millis() >= (displayTime+1000)) {
     Serial.println("Work time! ");
-    Serial.println("Time Elapsed: ");
-    Serial.print((millis()-(startTime+(2*workMillis)+(2*shortBreakMillis)))/60000);
-    Serial.print(" minutes");
+    elapsedMinutes = ((millis()-startTime)/60000);
+    elapsedSeconds = (((millis()-startTime)/1000)-(elapsedMinutes*60));
+    lcd.clear();
+    lcd.print("Work time!");
+    displayRuntime(elapsedMinutes, elapsedSeconds);
     displayTime = millis();
   }
 }
-if(millis() >= startTime+(3*workMillis)+(2*shortBreakMillis) && timerStep == 4 && timerActive == 1){
+if(millis() >= startTime+workMillis && timerStep == 4 && timerActive == 1){
   Serial.println("Third break time! ");
   timerStep++;
+  startTime = startTime+workMillis;
+  if(buzzActive == 1){
+    shortBuzz();
+  }
 }
-if(millis() >= startTime+(3*workMillis)+(2*shortBreakMillis) && timerStep == 5 && timerActive == 1){
-  if(millis() >= (displayTime+30000)) {
+if((millis() >= startTime) && timerStep == 5 && timerActive == 1){
+  if(millis() >= (displayTime+1000)) {
     Serial.println("Break time! ");
-    Serial.println("Time Elapsed: ");
-    Serial.print((millis()-(startTime+(3*workMillis)+(2*shortBreakMillis)))/60000);
-    Serial.print(" minutes");
+    elapsedMinutes = ((millis()-startTime)/60000);
+    elapsedSeconds = (((millis()-startTime)/1000)-(elapsedMinutes*60));
+    lcd.clear();
+    lcd.print("Break!");
+    displayRuntime(elapsedMinutes, elapsedSeconds);
     displayTime = millis();
   }
 }
-if(millis() >= startTime+(3*workMillis)+(3*shortBreakMillis) && timerStep == 5 && timerActive == 1){
+if(millis() >= startTime+shortBreakMillis && timerStep == 5 && timerActive == 1){
   Serial.println("Back to work, one last time! ");
+  if(buzzActive == 1){
+    doubleBuzz();
+  }
   timerStep++;
+  startTime = startTime+shortBreakMillis;
 }
-if(millis() >= startTime+(3*workMillis)+(3*shortBreakMillis) && timerStep == 6 && timerActive == 1){
-  if(millis() >= (displayTime+30000)) {
-    Serial.println("Work time! ");
+if(millis() >= startTime && timerStep == 6 && timerActive == 1){
+  if(millis() >= (displayTime+1000)) {
+    Serial.println("Work time!");
     Serial.println("Time Elapsed: ");
     Serial.print((millis()-(startTime+(3*workMillis)+(3*shortBreakMillis)))/60000);
     Serial.print(" minutes");
+    elapsedMinutes = ((millis()-startTime)/60000);
+    elapsedSeconds = (((millis()-startTime)/1000)-(elapsedMinutes*60));
+    lcd.clear();
+    lcd.print("Last work:");
+    displayRuntime(elapsedMinutes, elapsedSeconds);
     displayTime = millis();
   }
 }
-if(millis() >= startTime+(4*workMillis)+(3*shortBreakMillis) && timerStep == 6 && timerActive == 1){
+if(millis() >= startTime+workMillis && timerStep == 6 && timerActive == 1){
   Serial.println("Time for a longer break! ");
   timerStep++;
+  startTime = startTime+workMillis;
+  if(buzzActive == 1){
+    shortBuzz();
+  }
 }
-if(millis() >= startTime+(4*workMillis)+(3*shortBreakMillis) && timerStep == 7 && timerActive == 1){
-  if(millis() >= (displayTime+30000)) {
+if(millis() >= startTime && timerStep == 7 && timerActive == 1){
+  if(millis() >= (displayTime+1000)) {
     Serial.println("Long break time! ");
     Serial.println("Time Elapsed: ");
     Serial.print((millis()-(startTime+(4*workMillis)+(3*shortBreakMillis)))/60000);
     Serial.print(" minutes");
+    elapsedMinutes = ((millis()-startTime)/60000);
+    elapsedSeconds = (((millis()-startTime)/1000)-(elapsedMinutes*60));
+    lcd.clear();
+    lcd.print("Long break!");
+    displayRuntime(elapsedMinutes, elapsedSeconds);
     displayTime = millis();
 }
 }
-if(millis() >= startTime+(4*workMillis)+(3*shortBreakMillis)+longBreakMillis && timerStep == 7 && timerActive == 1) {
+if(millis() >= startTime+longBreakMillis && timerStep == 7 && timerActive == 1) {
   Serial.println("Pomo session over! ");
+  lcd.clear();
+  lcd.print("Pomo session");
+  lcd.setCursor(0, 1);
+  lcd.print("complete!");
+  if(buzzActive == 1){
+    longBuzz();
+  }
   timerStep = 0;
   timerActive = 0;
 }

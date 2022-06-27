@@ -124,11 +124,11 @@ void loop() {
   //something will break spectacularly
   if(timerActive == 0){
 potentOutput1 = analogRead(PotentPin1);
-workTime = map(potentOutput1, 0, 1023, 15, 35);
+workTime = map(potentOutput1, 0, 1023, 15, 36);
 potentOutput2 = analogRead(PotentPin2);
-shortBreakTime = map(potentOutput2, 0, 1023, 1, 10);
+shortBreakTime = map(potentOutput2, 0, 1023, 1, 11);
 potentOutput3 = analogRead(PotentPin3);
-longBreakTime = map(potentOutput3, 0, 1023, 10, 30);
+longBreakTime = map(potentOutput3, 0, 1023, 10, 31);
   }
   //convert values to timing longs if there is a change
   //and print them in serial for debugging
@@ -269,7 +269,7 @@ else{
 //a quick word on timerStep - it shows how far we are in the Pomo schedule. 0 is first work,
 //and 7 is the final, long break. Use this if you want to see how far we are, but don't call it unless you know the timer
 //is active - in stdby mode, timerStep == 0 without the timer running.
-//the buzzing is also in here - modify the longBuzz(), shortBuzz() and doubleBuzz() functions if
+//the buzzing is also in here - modify the Buzz() functions if
 //you want to fuck around with piezo.
 
 if (timerActive == 1 && millis() < (startTime+workMillis) && timerStep == 0){
@@ -297,8 +297,8 @@ if (timerActive == 1 && millis() < (startTime+workMillis) && timerStep == 0){
     }
     Serial.println("Break time! ");
   }
-if (timerActive == 1 && millis() < (startTime+workMillis+shortBreakMillis) && timerStep == 1){
-  //start by limiting feedback to once every 30 seconds
+if (timerActive == 1 && millis() < startTime && timerStep == 1){
+  //start by limiting feedback to once every second
   if(millis() >= (displayTime+1000)) {
     Serial.println("Break time! ");
     Serial.println("Time Elapsed: ");
